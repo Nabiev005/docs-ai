@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"; // Библиотеканын атын текшериңиз
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Language } from "../types";
 
-// API key Vite .env файлдан окуйбуз
+// API key
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
 export const generateLegalDocument = async (
@@ -18,42 +18,32 @@ export const generateLegalDocument = async (
       tr: "turkish"
     };
 
-    // Моделди чакыруу (gemini-1.5-flash эң туруктуу жана акысыз версиясы)
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash" 
-    });
+    // Моделди аныктоо
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const prompt = `
-You are an experienced lawyer in Kyrgyzstan.
-Create a legal document of type "${templateTitle}" in category "${category}".
-The target language for the document MUST be ${languageNames[lang]}.
+    const prompt = `You are an experienced lawyer in Kyrgyzstan. 
+    Create a legal document of type "${templateTitle}" in category "${category}". 
+    The target language is ${languageNames[lang]}.
+    User details: ${userDetails}.
+    Requirements: Official legal style, Kyrgyz laws, include placeholders for date and signature.`;
 
-User Details: 
-${userDetails}
-
-Requirements:
-1. Adhere to Kyrgyz Republic laws and official business documentation standards.
-2. Include a header (who is it to, who is it from).
-3. Use official, precise legal terminology in the target language (${languageNames[lang]}).
-4. Leave placeholders for signature and date.
-5. Return as clean Markdown.
-6. Use [Name] placeholders if the user didn't provide specific names.
-    `;
-
-    // Жаңы чакыруу форматы
+    // Суроо-талапты жиберүү
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    return text || "Error generating document.";
+    return text;
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    
-    // Эгер лимит бүтсө колдонуучуга түшүнүктүү билдирүү берүү
-    if (error.status === 429) {
-        throw new Error("Акысыз лимит бүттү. Бир аздан кийин кайра аракет кылыңыз.");
+    // Катанын себебин консолдон көрүү үчүн:
+    console.error("Толук ката:", error);
+
+    if (error.message?.includes("429")) {
+      throw new Error("Лимит бүттү. 1 мүнөт күтө туруңуз.");
     }
-    
-    throw new Error("Техникалык ката кетти. Сураныч, бир аздан кийин кайра аракет кылыңыз.");
+    if (error.message?.includes("API key not found")) {
+      throw new Error("API ачкычы табылган жок.");
+    }
+
+    throw new Error("Техникалык ката кетти. Сураныч, кайра аракет кылыңыз.");
   }
 };
