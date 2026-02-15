@@ -1,8 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Language } from "../types";
 
-// API key
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY?.trim() || "";
 
 export const generateLegalDocument = async (
   templateTitle: string,
@@ -10,40 +8,30 @@ export const generateLegalDocument = async (
   category: string,
   lang: Language
 ): Promise<string> => {
+  if (!API_KEY) throw new Error("API Key табылган жок!");
+
+  // URL v1beta версиясына кайтыңыз, ал көбүрөөк моделдерди колдойт
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+
   try {
-    const languageNames: Record<Language, string> = {
-      ky: "кыргыз",
-      ru: "русский",
-      en: "english",
-      tr: "turkish"
-    };
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Сен юристсиң. Документ: ${templateTitle}, Маалымат: ${userDetails}, Тили: ${lang}` }] }]
+      })
+    });
 
-    // Моделди аныктоо
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const data = await response.json();
 
-    const prompt = `You are an experienced lawyer in Kyrgyzstan. 
-    Create a legal document of type "${templateTitle}" in category "${category}". 
-    The target language is ${languageNames[lang]}.
-    User details: ${userDetails}.
-    Requirements: Official legal style, Kyrgyz laws, include placeholders for date and signature.`;
+    if (!response.ok) {
+      // Эгер дагы эле 404 чыкса, бул жерден катанын себебин көрөбүз
+      console.error("API Толук катасы:", data);
+      throw new Error(data.error?.message || "API Катасы");
+    }
 
-    // Суроо-талапты жиберүү
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-
-    return text;
+    return data.candidates[0].content.parts[0].text;
   } catch (error: any) {
-    // Катанын себебин консолдон көрүү үчүн:
-    console.error("Толук ката:", error);
-
-    if (error.message?.includes("429")) {
-      throw new Error("Лимит бүттү. 1 мүнөт күтө туруңуз.");
-    }
-    if (error.message?.includes("API key not found")) {
-      throw new Error("API ачкычы табылган жок.");
-    }
-
-    throw new Error("Техникалык ката кетти. Сураныч, кайра аракет кылыңыз.");
+    throw new Error(error.message || "Байланыш катасы");
   }
 };
