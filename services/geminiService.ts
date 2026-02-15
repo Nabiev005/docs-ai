@@ -1,10 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai"; // Библиотеканын атын текшериңиз
 import { Language } from "../types";
 
 // API key Vite .env файлдан окуйбуз
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY || ""
-});
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
 export const generateLegalDocument = async (
   templateTitle: string,
@@ -13,7 +11,6 @@ export const generateLegalDocument = async (
   lang: Language
 ): Promise<string> => {
   try {
-    // тилдерди карта кылып коёбуз
     const languageNames: Record<Language, string> = {
       ky: "кыргыз",
       ru: "русский",
@@ -21,10 +18,12 @@ export const generateLegalDocument = async (
       tr: "turkish"
     };
 
-    // AI чакыруу
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: `
+    // Моделди чакыруу (gemini-1.5-flash эң туруктуу жана акысыз версиясы)
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash" 
+    });
+
+    const prompt = `
 You are an experienced lawyer in Kyrgyzstan.
 Create a legal document of type "${templateTitle}" in category "${category}".
 The target language for the document MUST be ${languageNames[lang]}.
@@ -39,18 +38,22 @@ Requirements:
 4. Leave placeholders for signature and date.
 5. Return as clean Markdown.
 6. Use [Name] placeholders if the user didn't provide specific names.
-      `,
-      config: {
-        temperature: 0.2,
-        topP: 0.95,
-        thinkingConfig: { thinkingBudget: 2000 }
-      }
-    });
+    `;
 
-    // текст кайтаруу
-    return response.text || "Error generating document.";
-  } catch (error) {
+    // Жаңы чакыруу форматы
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    return text || "Error generating document.";
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    throw new Error("Technical error occurred. Please try again later.");
+    
+    // Эгер лимит бүтсө колдонуучуга түшүнүктүү билдирүү берүү
+    if (error.status === 429) {
+        throw new Error("Акысыз лимит бүттү. Бир аздан кийин кайра аракет кылыңыз.");
+    }
+    
+    throw new Error("Техникалык ката кетти. Сураныч, бир аздан кийин кайра аракет кылыңыз.");
   }
 };
